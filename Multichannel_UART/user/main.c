@@ -5,7 +5,7 @@
 /***********************************************************************************/
 //gpio configuration
 /***********************************************************************************/
-void GPIO_Config()
+void GPIO_Config(void)
 {
 	GPIO_InitTypeDef  GPIO_InitStructure;													//define GPIO initial struct
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOC | RCC_APB2Periph_GPIOD | RCC_APB2Periph_AFIO, ENABLE);	 				//enable GPIOA clock					
@@ -17,7 +17,7 @@ void GPIO_Config()
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;								//GPIO output mode
 	GPIO_Init(GPIOA, &GPIO_InitStructure);												//Init GPIOA
 	
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_7;											//MCO output pin 
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_7|GPIO_Pin_8;	  			//MCO output pin 
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;							//GPIO speed
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;							//GPIO output mode
 	GPIO_Init(GPIOC, &GPIO_InitStructure);												//Init GPIOC
@@ -32,11 +32,18 @@ void GPIO_Config()
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;							//GPIO speed
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;	  			//GPIO input mode
 	GPIO_Init(GPIOD, &GPIO_InitStructure);												//Init GPIOD
+	
+	GPIO_EXTILineConfig(GPIO_PortSourceGPIOC, GPIO_PinSource10);	//GPIO.h
+	
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10;										//PC10 ----- KEY2
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;							//GPIO speed
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;	  							//GPIO input mode
+	GPIO_Init(GPIOC, &GPIO_InitStructure);												//Init GPIOD
 }
 /***********************************************************************************/
 //UART configuration
 /***********************************************************************************/
-void UART_Config()
+void UART_Config(void)
 {
 	USART_InitTypeDef USART_InitStruct;												//define usart struct
 	USART_ClockInitTypeDef USART_ClockInitStructure;					//define usart clockinit struct
@@ -60,38 +67,57 @@ void UART_Config()
 /***********************************************************************************/
 //NVIC configuration
 /***********************************************************************************/
-void NVIC_Config()
+void NVIC_Config(void)
 {
 	NVIC_InitTypeDef  NVIC_InitStructure;												//define NVIC struct
-	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_0);							//interrupt group
-	NVIC_InitStructure.NVIC_IRQChannel = USART3_IRQn;						//??????2??????
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_0);							//interrupt group 0
+	NVIC_InitStructure.NVIC_IRQChannel = USART3_IRQn;						//USART3_IRQn interrupt
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;		
 	NVIC_InitStructure.NVIC_IRQChannelSubPriority =0;
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
 	NVIC_Init(&NVIC_InitStructure);
+	
+//	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_1);							//interrupt group 0
+	NVIC_InitStructure.NVIC_IRQChannel = EXTI15_10_IRQn;				//external interrupt
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority =1;
+	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_Init(&NVIC_InitStructure);
+}
+/***********************************************************************************/
+//EXTI configuration
+/***********************************************************************************/
+void EXTI_Config(void)
+{
+	EXTI_InitTypeDef EXTI_InitStruct;															//define an EXTI_Init struct
+
+	EXTI_InitStruct.EXTI_Line=EXTI_Line10;												//PC10
+	EXTI_InitStruct.EXTI_Mode=EXTI_Mode_Interrupt;								//interrupt mode
+	EXTI_InitStruct.EXTI_Trigger=EXTI_Trigger_Falling;						//falling edge
+	EXTI_InitStruct.EXTI_LineCmd=ENABLE;													//enable EXTI
+	EXTI_Init(&EXTI_InitStruct);
 }
 /***********************************************************************************/
 //main function
 /***********************************************************************************/
 int main()
 {
-
 	RCC_Config();
 	GPIO_Config();
 	UART_Config();
 	NVIC_Config();
+	EXTI_Config();
 	Delay_Init();
 	while(1)
 	{
 //		GPIO_ResetBits(GPIOC,GPIO_Pin_7);													//reset GPIOC_7
-//		Delay_ms(50);																						//delay 100ms
-//		GPIO_SetBits(GPIOC,GPIO_Pin_7);														//set GPIOC_7
-
+//		Delay_ms(50);																							//delay 100ms
+//		GPIO_SetBits(GPIOC,GPIO_Pin_7);														//set GPIOC_7	
 	}
 }
 
 /***********************************************************************************/
-//interrupt function
+//USART3 interrupt service function
 /***********************************************************************************/
 void USART3_IRQHandler(void)
 {
@@ -107,7 +133,6 @@ void USART3_IRQHandler(void)
 			GPIO_SetBits(GPIOC,GPIO_Pin_7);														//set GPIOC_7
 			Delay_ms(10);																							//delay 100ms
 		}
-		//Delay_ms(500);																						//delay 100ms
 		i++;
 		if(i>=255)
 		{
@@ -115,5 +140,20 @@ void USART3_IRQHandler(void)
 		}
 		USART_SendData(USART3, i);
 	}
-	USART_ClearFlag(USART3,USART_FLAG_RXNE);
+	USART_ClearFlag(USART3,USART_FLAG_RXNE);										//Clear USART3 receive interrupt flag
+}
+/***********************************************************************************/
+//EXIT10(PC10) interrupt service function
+/***********************************************************************************/
+void EXIT15_10_IRQHandler(void)
+{
+	if(EXTI_GetITStatus(EXTI_Line10) == SET)
+	{
+		GPIO_ResetBits(GPIOC,GPIO_Pin_8);													//reset GPIOC_7
+		Delay_ms(100);																							//delay 100ms
+		GPIO_SetBits(GPIOC,GPIO_Pin_8);														//set GPIOC_7
+		Delay_ms(100);			
+	}
+	EXTI_ClearFlag(EXTI_Line10);																	//Clear EXTI Flag
+	EXTI_ClearITPendingBit(EXTI_Line10);
 }
